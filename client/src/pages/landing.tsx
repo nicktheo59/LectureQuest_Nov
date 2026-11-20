@@ -1,8 +1,40 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Zap, BookOpen, Target, Calendar, Award, TrendingUp } from "lucide-react";
+import { FcGoogle } from "react-icons/fc";
+import { useQuery } from "@tanstack/react-query";
+import { getQueryFn } from "@/lib/queryClient";
+
+const AUTH_ERRORS: Record<string, string> = {
+  access_denied: "Google sign-in was cancelled.",
+  session_expired: "Your sign-in session expired. Please try again.",
+  domain_not_allowed: "That Google account isn't allowed to use this deployment.",
+  callback_failed: "We couldn't complete Google sign-in. Please try again.",
+};
+
+function GoogleButton({ size = "lg", label = "Continue with Google", testId }: { size?: "sm" | "lg"; label?: string; testId: string }) {
+  return (
+    <a href="/api/login" data-testid={`link-${testId}`}>
+      <Button
+        size={size}
+        variant={size === "sm" ? "outline" : "default"}
+        className={size === "lg" ? "text-base px-8 gap-2" : "gap-2"}
+        data-testid={`button-${testId}`}
+      >
+        <FcGoogle className={size === "lg" ? "h-5 w-5 bg-white rounded-full" : "h-4 w-4"} aria-hidden="true" />
+        {label}
+      </Button>
+    </a>
+  );
+}
 
 export default function Landing() {
+  const { data: authConfig } = useQuery<{ google: boolean; devBypass: boolean } | null>({
+    queryKey: ["/api/auth/config"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+  });
+  const authError = new URLSearchParams(window.location.search).get("auth_error");
+
   return (
     <div className="min-h-screen bg-background">
       <header className="flex items-center justify-between px-6 py-4 md:px-12">
@@ -10,11 +42,7 @@ export default function Landing() {
           <BookOpen className="h-6 w-6 text-primary" />
           <span className="font-serif text-xl font-medium">LectureQuest</span>
         </div>
-        <a href="/api/login" data-testid="link-login-header">
-          <Button variant="outline" size="sm" data-testid="button-login-header">
-            Log In
-          </Button>
-        </a>
+        <GoogleButton size="sm" label="Sign in" testId="login-header" />
       </header>
 
       <main className="px-6 md:px-12">
@@ -27,13 +55,26 @@ export default function Landing() {
             Transform your study routine with AI-powered quizzes, spaced repetition, and gamified learning. 
             Upload your lecture materials and let LectureQuest guide you to academic excellence.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a href="/api/login" data-testid="link-get-started">
-              <Button size="lg" className="text-base px-8" data-testid="button-get-started">
-                Get Started
-              </Button>
-            </a>
+          {authError && (
+            <p role="alert" className="mb-6 text-sm text-destructive" data-testid="text-auth-error">
+              {AUTH_ERRORS[authError] ?? "Sign-in failed. Please try again."}
+            </p>
+          )}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <GoogleButton testId="get-started" />
+            {authConfig?.devBypass && (
+              <a href="/api/login/dev" data-testid="link-dev-login">
+                <Button size="lg" variant="outline" className="text-base px-8">
+                  Dev login (local only)
+                </Button>
+              </a>
+            )}
           </div>
+          {authConfig && !authConfig.google && !authConfig.devBypass && (
+            <p className="mt-4 text-sm text-muted-foreground">
+              Google sign-in isn't configured on this server yet (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).
+            </p>
+          )}
         </section>
 
         <section className="mx-auto max-w-5xl pb-24">
@@ -135,11 +176,9 @@ export default function Landing() {
             <p className="text-muted-foreground mb-8 leading-relaxed">
               Join LectureQuest and start mastering your course material with the power of AI and proven learning science.
             </p>
-            <a href="/api/login" data-testid="link-cta-bottom">
-              <Button size="lg" className="text-base px-8" data-testid="button-cta-bottom">
-                Start Learning Today
-              </Button>
-            </a>
+            <div className="flex justify-center">
+              <GoogleButton label="Start learning with Google" testId="cta-bottom" />
+            </div>
           </div>
         </section>
       </main>

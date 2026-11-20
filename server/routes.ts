@@ -10,7 +10,7 @@ import { randomUUID } from "crypto";
 import type { CalendarEvent, CalendarSettings } from "@shared/schema";
 import { calendarSettingsSchema } from "@shared/schema";
 import type { VEvent } from "node-ical";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated } from "./auth";
 
 const require = createRequire(import.meta.url);
 const nodeIcalModule = require("node-ical");

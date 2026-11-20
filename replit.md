@@ -12,7 +12,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-- **Authentication**: Added Replit Auth (OpenID Connect) supporting Google, GitHub, Apple logins
+- **Authentication**: Replaced Replit Auth with Sign in with Google (server/auth.ts) so the app can be hosted anywhere
 - **Multi-User Data**: All data scoped by userId for complete data isolation
 - **Multi-Upload**: Batch upload up to 20 lectures at once with progress tracking
 - **Missed Lectures**: Identify and manage missed calendar lectures with "forget" option
@@ -24,8 +24,10 @@ Preferred communication style: Simple, everyday language.
 
 ### Authentication System
 
-**Implementation**: Replit Auth via OpenID Connect (server/replitAuth.ts)
-- Supports Google, GitHub, Apple, and email/password login
+**Implementation**: Google Sign-In via OpenID Connect + PKCE (server/auth.ts, openid-client)
+- Requires GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, APP_URL (redirect URI = APP_URL/api/callback)
+- Existing users are matched by verified email so data carries over from Replit Auth
+- DEV_AUTH_BYPASS=true enables /api/login/dev in development only
 - Session storage in PostgreSQL (sessions table) with 7-day TTL
 - SESSION_SECRET for secure session management
 - Protected routes use isAuthenticated middleware
@@ -34,6 +36,7 @@ Preferred communication style: Simple, everyday language.
 - `/api/login` - Initiates login flow
 - `/api/logout` - Ends session and redirects
 - `/api/callback` - OIDC callback handler
+- `/api/auth/config` - Which login methods are enabled
 - `/api/auth/user` - Returns authenticated user data
 
 ### Frontend Architecture
@@ -259,3 +262,4 @@ Preferred communication style: Simple, everyday language.
 - `ANTHROPIC_API_KEY` - Claude API authentication
 - `DATABASE_URL` - PostgreSQL connection string (when database is activated)
 - `NODE_ENV` - Environment mode (development/production)
+- `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `APP_URL` - see .env.example and DEPLOYMENT.md

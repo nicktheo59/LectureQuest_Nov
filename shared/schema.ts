@@ -5,7 +5,7 @@ import { createInsertSchema } from "drizzle-zod";
 
 // ==================== DATABASE TABLES ====================
 
-// Session storage table for Replit Auth
+// Session storage table (express-session via connect-pg-simple)
 export const sessions = pgTable(
   "sessions",
   {
@@ -16,7 +16,7 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// User profile table with Replit Auth integration
+// User profile table (populated by Google Sign-In, see server/auth.ts)
 export const usersTable = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email").unique(),

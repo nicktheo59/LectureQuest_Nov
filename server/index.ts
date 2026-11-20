@@ -1,3 +1,4 @@
+import "dotenv/config"; // must be first: loads .env before anything reads process.env
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
@@ -67,8 +68,8 @@ app.use((req, res, next) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
+    console.error(err);
+    if (!res.headersSent) res.status(status).json({ message });
   });
 
   // importantly only setup vite in development and after
@@ -81,19 +82,12 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
+  // Serve API + client on PORT (hosting platforms inject this). Default 5000.
+  // Note: on macOS, port 5000 is used by AirPlay Receiver — set PORT=3000 in .env.
+  // (`reusePort` was removed: it throws ENOTSUP on macOS and isn't needed.)
   const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`serving on port ${port}`);
-    },
-  );
+  const host = process.env.HOST || "0.0.0.0";
+  httpServer.listen({ port, host }, () => {
+    log(`serving on http://localhost:${port}`);
+  });
 })();

@@ -62,6 +62,7 @@ export interface LectureUpload {
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   
   getUserProfile(userId: string): Promise<UserProfile>;
@@ -223,6 +224,11 @@ export class DatabaseStorage implements IStorage {
   
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id));
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email));
     return user;
   }
 
@@ -824,12 +830,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const normalizedUsername = username.toLowerCase().trim();
-    const users = await db.select().from(usersTable);
-    const user = users.find(u => 
-      (u.username && u.username.toLowerCase() === normalizedUsername) ||
-      (u.email && u.email.toLowerCase() === normalizedUsername)
-    );
+    // There is no username column — friends are found by (case-insensitive) email address.
+    const normalized = username.toLowerCase().trim();
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(sql`lower(${usersTable.email}) = ${normalized}`)
+      .limit(1);
     return user;
   }
 

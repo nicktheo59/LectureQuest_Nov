@@ -1,4 +1,14 @@
-import { Flame, Moon, Sun, Zap } from "lucide-react";
+import { Flame, LogOut, Moon, Sun, Zap } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTheme } from "@/components/theme-provider";
@@ -13,6 +23,9 @@ interface HeaderProps {
 
 export function Header({ userProfile, onNavigate, currentView }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
+  const { user } = useAuth();
+  const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "Account";
+  const initials = (user?.firstName?.[0] ?? user?.email?.[0] ?? "?").toUpperCase();
 
   const currentLevelXP = Math.pow(userProfile.level, 2) * 100;
   const nextLevelXP = xpForNextLevel(userProfile.level);
@@ -110,6 +123,36 @@ export function Header({ userProfile, onNavigate, currentView }: HeaderProps) {
               <Moon className="h-[18px] w-[18px]" aria-hidden="true" />
             )}
           </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Account menu"
+                data-testid="button-account-menu"
+              >
+                <Avatar className="h-8 w-8">
+                  {user?.profileImageUrl && (
+                    <AvatarImage src={user.profileImageUrl} alt="" referrerPolicy="no-referrer" />
+                  )}
+                  <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+                </Avatar>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel className="font-normal">
+                <p className="text-sm font-medium truncate">{displayName}</p>
+                {user?.email && <p className="text-xs text-muted-foreground truncate">{user.email}</p>}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <a href="/api/logout" data-testid="link-logout" className="cursor-pointer">
+                  <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Sign out
+                </a>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>

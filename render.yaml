@@ -1,0 +1,31 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Dashboard → New → Blueprint → pick this repo/branch. Render will prompt for the
+# `sync: false` secrets. Database: use Neon (free tier, recommended) or Render Postgres.
+services:
+  - type: web
+    name: lecturequest
+    runtime: node
+    plan: starter            # free plan works too, but sleeps after 15 min idle
+    branch: main
+    # --include=dev: vite/esbuild/tsx are devDependencies but needed to build
+    buildCommand: npm ci --include=dev && npm run build
+    # Create/upgrade tables once from your machine: DATABASE_URL=<neon url> npm run db:push
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20"
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false          # paste your Neon connection string
+      - key: APP_URL
+        sync: false          # e.g. https://lecturequest.onrender.com (or your custom domain)
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
