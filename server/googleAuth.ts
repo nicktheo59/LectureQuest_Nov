@@ -140,6 +140,8 @@ export function setupAuth(app: Express) {
       // A duplicate email is rejected by Postgres, never used to link accounts.
       const userId = `google:${claims.sub}`;
       try {
+        const existing = await storage.getUserByEmail(email);
+        if (existing && existing.id !== userId) return res.redirect("/?auth=existing-account");
         await storage.upsertUser({
           id: userId,
           email,

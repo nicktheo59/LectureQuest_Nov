@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { createRequire } from "module";
 import { promises as dns } from "dns";
+import type { LookupFunction } from "node:net";
 import https from "https";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
@@ -348,22 +349,14 @@ async function safeFetchIcsContent(urlString: string, maxRedirects = 5): Promise
     const result = await new Promise<{ content: string; redirect?: string; error?: string }>((resolve) => {
       const url = new URL(currentUrl);
       
-      const customLookup: typeof dns.lookup = (
-        _hostname: string,
-        options: any,
-        callback: (err: NodeJS.ErrnoException | null, address: string | dns.LookupAddress[], family?: number) => void
-      ) => {
-        if (typeof options === "function") {
-          callback = options;
-          options = {};
-        }
-        if (options && options.all) {
+      const customLookup: LookupFunction = (_hostname, options, callback) => {
+        if (options.all) {
           callback(null, [{ address: validatedAddress, family: validatedFamily }]);
         } else {
           callback(null, validatedAddress, validatedFamily);
         }
       };
-      
+
       const options: https.RequestOptions = {
         hostname: url.hostname,
         port: url.port || 443,
@@ -374,7 +367,7 @@ async function safeFetchIcsContent(urlString: string, maxRedirects = 5): Promise
           "Accept": "text/calendar, */*",
         },
         timeout: 30000,
-        lookup: customLookup as any,
+        lookup: customLookup,
       };
       
       const req = https.request(options, (res) => {

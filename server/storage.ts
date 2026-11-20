@@ -118,7 +118,7 @@ export interface IStorage {
   getPendingRequests(userId: string): Promise<{from: User, request: Friendship}[]>;
   getLeaderboard(userId: string): Promise<{user: User, weeklyXp: number, rank: number}[]>;
   logXpEarned(userId: string, amount: number): Promise<void>;
-  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
 }
 
 function dbUserToProfile(user: DbUser): UserProfile {
@@ -823,18 +823,15 @@ export class DatabaseStorage implements IStorage {
       ));
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const normalizedUsername = username.toLowerCase().trim();
-    const users = await db.select().from(usersTable);
-    const user = users.find(u => 
-      (u.username && u.username.toLowerCase() === normalizedUsername) ||
-      (u.email && u.email.toLowerCase() === normalizedUsername)
-    );
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(usersTable)
+      .where(sql`lower(${usersTable.email}) = ${email.trim().toLowerCase()}`)
+      .limit(1);
     return user;
   }
 
   async sendFriendRequest(userId: string, friendUsername: string): Promise<Friendship> {
-    const friendUser = await this.getUserByUsername(friendUsername);
+    const friendUser = await this.getUserByEmail(friendUsername);
     if (!friendUser) {
       throw new Error("User not found");
     }

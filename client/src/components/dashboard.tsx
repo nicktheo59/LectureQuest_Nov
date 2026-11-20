@@ -334,8 +334,6 @@ export function Dashboard({
     return user.email || "Unknown";
   };
   
-  const currentUserRank = leaderboard?.find(e => e.rank === leaderboard.findIndex(l => l.user.id === userProfile) + 1)?.rank;
-  
   const formatEventDate = (dateStr: string) => {
     const date = new Date(dateStr);
     const today = new Date();
@@ -1193,14 +1191,14 @@ export function Dashboard({
               <UserPlus className="h-5 w-5 text-primary" />
               Add Friend
             </DialogTitle>
-            <DialogDescription>Enter their username or email to send a friend request</DialogDescription>
+            <DialogDescription>Enter the email they use to sign in to LectureQuest</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div className="space-y-2">
-              <Label htmlFor="friend-username">Username or Email</Label>
+              <Label htmlFor="friend-username">Email</Label>
               <Input 
                 id="friend-username" 
-                placeholder="Enter username or email" 
+                placeholder="Enter email"
                 value={friendUsername} 
                 onChange={(e) => setFriendUsername(e.target.value)} 
                 onKeyDown={(e) => {
