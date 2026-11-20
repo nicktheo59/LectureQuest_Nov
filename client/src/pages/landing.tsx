@@ -2,7 +2,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Zap, BookOpen, Target, Calendar, Award, TrendingUp } from "lucide-react";
 
+const signInMessages = new Map([
+  ["cancelled", "Google sign-in was cancelled. You can try again when you're ready."],
+  ["retry", "We couldn't complete Google sign-in. Please try again."],
+  ["unavailable", "Google sign-in is temporarily unavailable. Please try again later."],
+  ["unverified", "Please sign in with a verified Google email address."],
+  ["restricted", "This Google account isn't on the LectureQuest beta access list."],
+  ["existing-account", "An account with this email already exists. Ask the app administrator for help moving your old account before signing in with Google."],
+]);
+
 export default function Landing() {
+  const message = signInMessages.get(new URLSearchParams(window.location.search).get("auth") ?? "");
   return (
     <div className="min-h-screen bg-background">
       <header className="flex items-center justify-between px-6 py-4 md:px-12">
@@ -10,14 +20,17 @@ export default function Landing() {
           <BookOpen className="h-6 w-6 text-primary" />
           <span className="font-serif text-xl font-medium">LectureQuest</span>
         </div>
-        <a href="/api/login" data-testid="link-login-header">
-          <Button variant="outline" size="sm" data-testid="button-login-header">
-            Log In
-          </Button>
-        </a>
+        <Button asChild variant="outline" size="sm">
+          <a href="/api/login" data-testid="link-login-header">Sign in with Google</a>
+        </Button>
       </header>
 
       <main className="px-6 md:px-12">
+        {message && (
+          <p role="alert" className="mx-auto mt-4 max-w-3xl rounded-md border border-border bg-card p-4 text-center text-sm">
+            {message}
+          </p>
+        )}
         <section className="mx-auto max-w-4xl py-16 md:py-24 text-center">
           <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-normal tracking-tight text-foreground mb-6">
             Master Your Lectures,<br />
@@ -28,11 +41,9 @@ export default function Landing() {
             Upload your lecture materials and let LectureQuest guide you to academic excellence.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a href="/api/login" data-testid="link-get-started">
-              <Button size="lg" className="text-base px-8" data-testid="button-get-started">
-                Get Started
-              </Button>
-            </a>
+            <Button asChild size="lg" className="text-base px-8">
+              <a href="/api/login" data-testid="link-get-started">Sign in with Google</a>
+            </Button>
           </div>
         </section>
 
@@ -135,11 +146,9 @@ export default function Landing() {
             <p className="text-muted-foreground mb-8 leading-relaxed">
               Join LectureQuest and start mastering your course material with the power of AI and proven learning science.
             </p>
-            <a href="/api/login" data-testid="link-cta-bottom">
-              <Button size="lg" className="text-base px-8" data-testid="button-cta-bottom">
-                Start Learning Today
-              </Button>
-            </a>
+            <Button asChild size="lg" className="text-base px-8">
+              <a href="/api/login" data-testid="link-cta-bottom">Sign in with Google</a>
+            </Button>
           </div>
         </section>
       </main>

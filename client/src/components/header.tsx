@@ -1,4 +1,4 @@
-import { Flame, Moon, Sun, Zap } from "lucide-react";
+import { Flame, LogOut, Moon, Sun, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTheme } from "@/components/theme-provider";
@@ -110,6 +110,11 @@ export function Header({ userProfile, onNavigate, currentView }: HeaderProps) {
               <Moon className="h-[18px] w-[18px]" aria-hidden="true" />
             )}
           </Button>
+          <form method="post" action="/api/logout">
+            <Button variant="ghost" size="icon" type="submit" className="h-9 w-9" aria-label="Sign out" title="Sign out">
+              <LogOut className="h-[18px] w-[18px]" aria-hidden="true" />
+            </Button>
+          </form>
         </div>
       </div>
     </header>

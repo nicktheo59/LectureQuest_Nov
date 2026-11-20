@@ -1,3 +1,5 @@
+> Historical Replit development notes. Authentication and deployment on `Sol` are now documented in [README.md](README.md).
+
 # LectureQuest - Gamified Learning Platform
 
 ## Overview

@@ -10,7 +10,7 @@ import { randomUUID } from "crypto";
 import type { CalendarEvent, CalendarSettings } from "@shared/schema";
 import { calendarSettingsSchema } from "@shared/schema";
 import type { VEvent } from "node-ical";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, authenticatedUserId } from "./googleAuth";
 
 const require = createRequire(import.meta.url);
 const nodeIcalModule = require("node-ical");
@@ -59,9 +59,10 @@ async function parsePdf(buffer: Buffer): Promise<{ text: string }> {
   return { text: fullText };
 }
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+let anthropic: Anthropic | undefined;
+function getAnthropic() {
+  return anthropic ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+}
 
 const DEFAULT_MODEL = "claude-sonnet-4-20250514";
 
@@ -545,22 +546,24 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
-  await setupAuth(app);
+  setupAuth(app);
 
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  app.get('/api/auth/user', isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const user = await storage.getUser(userId);
-      res.json(user);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+      const { id, email, firstName, lastName, profileImageUrl } = user;
+      res.json({ id, email, firstName, lastName, profileImageUrl });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
     }
   });
 
-  app.post("/api/generate-quiz", isAuthenticated, async (req: any, res) => {
+  app.post("/api/generate-quiz", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const parsed = generateQuizRequestSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ 
@@ -628,7 +631,10 @@ Requirements:
 - Map each skill to 2-3 relevant career paths
 - DO NOT include any text outside the JSON object`;
 
-      const message = await anthropic.messages.create({
+      if (!process.env.ANTHROPIC_API_KEY) {
+        return res.status(503).json({ error: "AI quizzes are not configured for this deployment." });
+      }
+      const message = await getAnthropic().messages.create({
         model: DEFAULT_MODEL,
         max_tokens: 2048,
         messages: [{ role: "user", content: prompt }],
@@ -644,7 +650,7 @@ Requirements:
       try {
         quizResponse = JSON.parse(cleanedResponse);
       } catch (parseError) {
-        console.error("Failed to parse quiz response:", cleanedResponse);
+        console.error("Failed to parse quiz response");
         return res.status(500).json({ 
           error: "Failed to generate quiz. Please try again.",
           details: "Invalid JSON response from AI"
@@ -714,9 +720,9 @@ Requirements:
   });
 
   // Get daily quiz status - shows due topics using active recall algorithm
-  app.get("/api/daily-quiz/status", isAuthenticated, async (req: any, res) => {
+  app.get("/api/daily-quiz/status", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const dueTopics = await storage.getDueTopics(userId, 10);
       const currentPlan = await storage.getCurrentDailyQuizPlan(userId);
       const lectures = await storage.getLectures(userId);
@@ -777,9 +783,9 @@ Requirements:
   });
 
   // Generate daily quiz using server-side active recall topic selection
-  app.post("/api/generate-daily-quiz", isAuthenticated, async (req: any, res) => {
+  app.post("/api/generate-daily-quiz", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       // Get due topics from spaced repetition algorithm
       const dueTopics = await storage.getDueTopics(userId, 10);
       const lectures = await storage.getLectures(userId);
@@ -915,7 +921,10 @@ Important:
 - Include the topic field to track which topic each question tests
 - DO NOT include any text outside the JSON array`;
 
-      const message = await anthropic.messages.create({
+      if (!process.env.ANTHROPIC_API_KEY) {
+        return res.status(503).json({ error: "AI quizzes are not configured for this deployment." });
+      }
+      const message = await getAnthropic().messages.create({
         model: DEFAULT_MODEL,
         max_tokens: 2048,
         messages: [{ role: "user", content: prompt }],
@@ -931,7 +940,7 @@ Important:
       try {
         questions = JSON.parse(cleanedResponse);
       } catch (parseError) {
-        console.error("Failed to parse daily quiz response:", cleanedResponse);
+        console.error("Failed to parse daily quiz response");
         return res.status(500).json({ 
           error: "Failed to generate daily quiz. Please try again.",
           details: "Invalid JSON response from AI"
@@ -1006,9 +1015,9 @@ Important:
   });
 
   // Complete daily quiz and update spaced repetition stats
-  app.post("/api/daily-quiz/complete", isAuthenticated, async (req: any, res) => {
+  app.post("/api/daily-quiz/complete", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const { planId, score, topicScores } = req.body;
       
       if (typeof score !== "number" || score < 0 || score > 100) {
@@ -1097,7 +1106,7 @@ Important:
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  app.post("/api/parse-file", isAuthenticated, async (req: any, res) => {
+  app.post("/api/parse-file", isAuthenticated, async (req, res) => {
     try {
       const { fileData, fileType, fileName } = req.body;
       
@@ -1186,9 +1195,9 @@ Important:
     }
   });
 
-  app.get("/api/profile", isAuthenticated, async (req: any, res) => {
+  app.get("/api/profile", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const profile = await storage.getUserProfile(userId);
       res.json(profile);
     } catch (error: any) {
@@ -1197,9 +1206,9 @@ Important:
     }
   });
 
-  app.patch("/api/profile", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/profile", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const parsed = updateProfileSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ 
@@ -1225,9 +1234,9 @@ Important:
     }
   });
 
-  app.post("/api/profile/reset", isAuthenticated, async (req: any, res) => {
+  app.post("/api/profile/reset", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const profile = await storage.resetUserProfile(userId);
       res.json(profile);
     } catch (error: any) {
@@ -1236,9 +1245,9 @@ Important:
     }
   });
 
-  app.post("/api/profile/demo", isAuthenticated, async (req: any, res) => {
+  app.post("/api/profile/demo", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const data = await storage.loadDemoData(userId);
       res.json(data);
     } catch (error: any) {
@@ -1247,9 +1256,9 @@ Important:
     }
   });
 
-  app.get("/api/lectures", isAuthenticated, async (req: any, res) => {
+  app.get("/api/lectures", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const lectures = await storage.getLectures(userId);
       res.json(lectures);
     } catch (error: any) {
@@ -1258,9 +1267,9 @@ Important:
     }
   });
 
-  app.get("/api/lectures/:id", isAuthenticated, async (req: any, res) => {
+  app.get("/api/lectures/:id", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const lecture = await storage.getLecture(userId, req.params.id);
       if (!lecture) {
         return res.status(404).json({ error: "Lecture not found" });
@@ -1272,9 +1281,9 @@ Important:
     }
   });
 
-  app.post("/api/lectures", isAuthenticated, async (req: any, res) => {
+  app.post("/api/lectures", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const parsed = addLectureSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ 
@@ -1291,9 +1300,9 @@ Important:
   });
 
   // Batch upload endpoint for multiple lectures
-  app.post("/api/lectures/batch", isAuthenticated, async (req: any, res) => {
+  app.post("/api/lectures/batch", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const { lectures: lectureInputs } = req.body;
       
       if (!Array.isArray(lectureInputs) || lectureInputs.length === 0) {
@@ -1358,9 +1367,9 @@ Important:
     }
   });
 
-  app.patch("/api/lectures/:id", isAuthenticated, async (req: any, res) => {
+  app.patch("/api/lectures/:id", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const { id } = req.params;
       const parsed = updateLectureSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1380,9 +1389,9 @@ Important:
     }
   });
 
-  app.delete("/api/lectures/:id", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/lectures/:id", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const { id } = req.params;
       const deleted = await storage.deleteLecture(userId, id);
       if (!deleted) {
@@ -1395,9 +1404,9 @@ Important:
     }
   });
 
-  app.get("/api/weak-topics", isAuthenticated, async (req: any, res) => {
+  app.get("/api/weak-topics", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const topics = await storage.getWeakTopics(userId);
       res.json(topics);
     } catch (error: any) {
@@ -1406,9 +1415,9 @@ Important:
     }
   });
 
-  app.get("/api/skills", isAuthenticated, async (req: any, res) => {
+  app.get("/api/skills", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const lectures = await storage.getLectures(userId);
       
       const skillsMap = new Map<string, {
@@ -1471,9 +1480,9 @@ Important:
     }
   });
 
-  app.get("/api/calendar", isAuthenticated, async (req: any, res) => {
+  app.get("/api/calendar", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const settings = await storage.getCalendarSettings(userId);
       const events = await storage.getCalendarEvents(userId);
       const lectures = await storage.getLectures(userId);
@@ -1540,9 +1549,9 @@ Important:
     }
   });
 
-  app.post("/api/calendar/dismiss/:eventId", isAuthenticated, async (req: any, res) => {
+  app.post("/api/calendar/dismiss/:eventId", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const { eventId } = req.params;
       const { reason } = req.body;
       
@@ -1555,9 +1564,9 @@ Important:
     }
   });
 
-  app.delete("/api/calendar/dismiss/:eventId", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/calendar/dismiss/:eventId", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const { eventId } = req.params;
       
       await storage.undismissLecture(userId, eventId);
@@ -1569,9 +1578,9 @@ Important:
     }
   });
 
-  app.post("/api/calendar", isAuthenticated, async (req: any, res) => {
+  app.post("/api/calendar", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const parsed = calendarSettingsSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ 
@@ -1622,9 +1631,9 @@ Important:
     }
   });
 
-  app.post("/api/calendar/refresh", isAuthenticated, async (req: any, res) => {
+  app.post("/api/calendar/refresh", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const settings = await storage.getCalendarSettings(userId);
       if (!settings) {
         return res.status(400).json({ error: "No calendar configured" });
@@ -1679,9 +1688,9 @@ Important:
     }
   });
 
-  app.delete("/api/calendar", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/calendar", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       await storage.clearCalendarSettings(userId);
       res.json({ success: true, message: "Calendar removed" });
     } catch (error: any) {
@@ -1691,9 +1700,9 @@ Important:
   });
 
   // Friends API endpoints
-  app.get("/api/friends", isAuthenticated, async (req: any, res) => {
+  app.get("/api/friends", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const friends = await storage.getFriends(userId);
       res.json(friends);
     } catch (error: any) {
@@ -1702,9 +1711,9 @@ Important:
     }
   });
 
-  app.get("/api/friends/requests", isAuthenticated, async (req: any, res) => {
+  app.get("/api/friends/requests", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const requests = await storage.getPendingRequests(userId);
       res.json(requests);
     } catch (error: any) {
@@ -1713,9 +1722,9 @@ Important:
     }
   });
 
-  app.post("/api/friends/request", isAuthenticated, async (req: any, res) => {
+  app.post("/api/friends/request", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const { username } = req.body;
       
       if (!username || typeof username !== "string") {
@@ -1730,9 +1739,9 @@ Important:
     }
   });
 
-  app.post("/api/friends/accept/:requestId", isAuthenticated, async (req: any, res) => {
+  app.post("/api/friends/accept/:requestId", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const { requestId } = req.params;
       
       await storage.acceptFriendRequest(userId, requestId);
@@ -1743,9 +1752,9 @@ Important:
     }
   });
 
-  app.post("/api/friends/decline/:requestId", isAuthenticated, async (req: any, res) => {
+  app.post("/api/friends/decline/:requestId", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const { requestId } = req.params;
       
       await storage.declineFriendRequest(userId, requestId);
@@ -1756,9 +1765,9 @@ Important:
     }
   });
 
-  app.delete("/api/friends/:friendId", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/friends/:friendId", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const { friendId } = req.params;
       
       await storage.removeFriend(userId, friendId);
@@ -1769,9 +1778,9 @@ Important:
     }
   });
 
-  app.get("/api/friends/leaderboard", isAuthenticated, async (req: any, res) => {
+  app.get("/api/friends/leaderboard", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = authenticatedUserId(req);
       const leaderboard = await storage.getLeaderboard(userId);
       res.json(leaderboard);
     } catch (error: any) {
